@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <title>Jogo das Rotas Metabólicas - Versão Melhorada</title>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+  <style>
+    body { margin: 0; background: #1a1a1a; color: #fff; font-family: Arial, sans-serif; }
+    #game-container { margin: auto; display: block; }
+    input { font-size: 18px; padding: 5px; border-radius: 5px; border: none; }
+  </style>
+</head>
+<body>
+  <div id="game-container"></div>
+
+  <script>
+    const config = {
+      type: Phaser.AUTO,
+      width: 900,
+      height: 600,
+      backgroundColor: '#0d0d0d',
+      parent: 'game-container',
+      physics: {
+        default: 'arcade',
+        arcade: { debug: false }
+      },
+      scene: {
+        preload,
+        create,
+        update
+      }
+    };
+
+    const routes = [
+      { name: "Glicólise", question: "Onde ocorre a glicólise?", answer: "citoplasma" },
+      { name: "Ciclo de Krebs", question: "Onde ocorre o ciclo de Krebs?", answer: "mitocôndria" },
+      { name: "Cadeia Respiratória", question: "Qual é o principal transportador de elétrons?", answer: "NADH" },
+      { name: "Beta-Oxidação", question: "Que molécula é degradada na beta-oxidação?", answer: "ácidos graxos" },
+      { name: "Via das Pentoses Fosfato", question: "Qual o principal produto da via das pentoses?", answer: "ribose-5-fosfato" }
+    ];
+
+    let game = new Phaser.Game(config);
+
+    let player;
+    let cursors;
+    let currentRouteIndex = 0;
+    let routeTexts = [];
+    let questionText;
+    let inputElement;
+    let feedbackText;
+    let canMove = true;
+    let score = 0;
+    let scoreText;
+
+    function preload() {
+      // Imagem da molécula (personagem)
+      this.load.image('player', 'https://cdn-icons-png.flaticon.com/512/252/252025.png');
+      // Fundo simples representando célula
+      this.load.image('background', 'https://cdn.pixabay.com/photo/2016/11/18/16/32/cell-1838655_960_720.jpg');
+      // Ícones das rotas (exemplo genérico)
+      this.load.image('icon_glycolysis', 'https://cdn-icons-png.flaticon.com/512/4302/4302317.png');
+      this.load.image('icon_krebs', 'https://cdn-icons-png.flaticon.com/512/4302/4302361.png');
+      this.load.image('icon_chain', 'https://cdn-icons-png.flaticon.com/512/4302/4302349.png');
+      this.load.image('icon_beta', 'https://cdn-icons-png.flaticon.com/512/4302/4302323.png');
+      this.load.image('icon_pentose', 'https://cdn-icons-png.flaticon.com/512/4302/4302353.png');
+    }
+
+    function create() {
+      this.add.image(450, 300, 'background').setScale(1.4).setAlpha(0.3);
+
+      const iconKeys = ['icon_glycolysis', 'icon_krebs', 'icon_chain', 'icon_beta', 'icon_pentose'];
+
+      // Cria as "estações" das rotas no mapa (horizontal)
+      for (let i = 0; i < routes.length; i++) {
+        let x = 120 + i * 160;
+        let y = 300;
+
+        // Ícone da rota
+        let icon = this.add.image(x, y - 40, iconKeys[i]).setScale(0.1);
+        icon.setAlpha(i === 0 ? 1 : 0.3);
+
+        // Texto do nome da rota
+        let txt = this.add.text(x, y + 50, routes[i].name, { fontSize: '20px', fill: '#fff' }).setOrigin(0.5);
+        txt.setAlpha(i === 0 ? 1 : 0.3);
+
+        routeTexts.push({ txt, icon });
+      }
+
+      // Cria o jogador na primeira estação
+      player = this.physics.add.sprite(120, 350, 'player').setScale(0.1);
+      player.setCollideWorldBounds(true);
+
+      cursors = this.input.keyboard.createCursorKeys();
+
+      // Placar
+      scoreText = this.add.text(20, 20, `Pontuação: 0`, { fontSize: '22px', fill: '#00ff00' });
+
+      // Pergunta inicial
+      showQuestion(this, currentRouteIndex);
+    }
+
+    function update() {
+      if (!canMove) return;
+
+      if (Phaser.Input.Keyboard.JustDown(cursors.right)) {
+        if (currentRouteIndex < routes.length - 1 && routeTexts[currentRouteIndex + 1].txt.alpha === 1) {
+          currentRouteIndex++;
+          movePlayerToStation(currentRouteIndex);
+          showQuestion(this, currentRouteIndex);
+        }
+      }
+      if (Phaser.Input.Keyboard.JustDown(cursors.left)) {
+        if (currentRouteIndex > 0) {
+          currentRouteIndex--;
+          movePlayerToStation(currentRouteIndex);
+          showQuestion(this, currentRouteIndex);
+        }
+      }
+    }
+
+    function movePlayerToStation(index) {
+      let targetX = 120 + index * 160;
+      player.x = targetX;
+    }
+
+    function showQuestion(scene, index) {
+      canMove = false;
+
+      // Limpa perguntas anteriores
+      if (questionText) questionText.destroy();
+      if (feedbackText) feedbackText.destroy();
+      if (inputElement) {
+        inputElement.remove();
+        inputElement = null;
+      }
+
+      questionText = scene.add.text(450, 100, `Pergunta sobre ${routes[index].name}:\n${routes[index].question}`, 
+        { fontSize: '22px', fill: '#ffff00', align: 'center', wordWrap: { width: 600 } }).setOrigin(0.5);
+
+      // Cria input HTML para resposta
+      inputElement = document.createElement('input');
+      inputElement.type = 'text';
+      inputElement.style.position = 'absolute';
+      inputElement.style.left = (scene.game.canvas.getBoundingClientRect().left + 350) + 'px';
+      inputElement.style.top = (scene.game.canvas.getBoundingClientRect().top + 180) + 'px';
+      inputElement.style.width = '200px';
+      inputElement.style.fontSize = '18px';
+      inputElement.style.borderRadius = '5px';
+      inputElement.style.border = '2px solid #555';
+      document.body.appendChild(inputElement);
+      inputElement.focus();
+
+      inputElement.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+          checkAnswer(scene, inputElement.value.toLowerCase().trim());
+        }
+      });
+    }
+
+    function checkAnswer(scene, answer) {
+      if (answer === routes[currentRouteIndex].answer.toLowerCase()) {
+        feedbackText = scene.add.text(450, 220, 'Resposta correta! Pode avançar.', { fontSize: '20px', fill: '#00ff00' }).setOrigin(0.5);
+
+        // Atualiza alfa para mostrar desbloqueio
+        routeTexts[currentRouteIndex].txt.setAlpha(1);
+        routeTexts[currentRouteIndex].icon.setAlpha(1);
+
+        if (currentRouteIndex < routes.length - 1) {
+          routeTexts[currentRouteIndex + 1].txt.setAlpha(1);
+          routeTexts[currentRouteIndex + 1].icon.setAlpha(1);
+        }
+
+        // Atualiza pontuação
+        score++;
+        scoreText.setText(`Pontuação: ${score}`);
+
+        // Explicação curta da rota
+        showExplanation(scene, currentRouteIndex);
+
+        canMove = true;
+        inputElement.remove();
+        inputElement = null;
+      } else {
+        feedbackText = scene.add.text(450, 220, 'Resposta errada, tente novamente.', { fontSize: '20px', fill: '#ff3300' }).setOrigin(0.5);
+      }
+    }
+
+    function showExplanation(scene, index) {
+      const explanations = [
+        "A glicólise ocorre no citoplasma e é a quebra da glicose em piruvato.",
+        "O ciclo de Krebs ocorre na mitocôndria e gera NADH e FADH2.",
+        "A cadeia respiratória transporta elétrons via NADH e produz ATP.",
+        "A beta-oxidação degrada ácidos graxos para gerar acetil-CoA.",
+        "A via das pentoses fosfato produz ribose-5-fosfato para síntese de nucleotídeos."
+      ];
+
+      if (scene.explanationText) scene.explanationText.destroy();
+      scene.explanationText = scene.add.text(450, 270, explanations[index], { fontSize: '18px', fill: '#cccccc', align: 'center', wordWrap: { width: 700 } }).setOrigin(0.5);
+
+      // Remove feedback depois de 4 segundos para não poluir a tela
+      if (scene.feedbackTimer) scene.feedbackTimer.remove(false);
+      scene.feedbackTimer = scene.time.delayedCall(4000, () => {
+        if (feedbackText) feedbackText.destroy();
+        if (scene.explanationText) scene.explanationText.destroy();
+      });
+    }
+  </script>
+</body>
+</html>
